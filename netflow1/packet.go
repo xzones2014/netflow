@@ -7,12 +7,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/tehmaze/netflow/read"
-)
-
-const (
-	// Version word in the Packet Header
-	Version uint16 = 0x0001
+	"github.com/xzones2014/netflow/read"
 )
 
 // Packet is a NetFlow v1 packet

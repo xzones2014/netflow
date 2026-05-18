@@ -9,21 +9,22 @@ import (
 	"net"
 	"time"
 
-	"github.com/tehmaze/netflow/session"
+	"github.com/xzones2014/netflow/session"
 )
 
-// Builtin dictionary of information elements
-var builtin = make(informationElements)
-
-// Translate knows how to translate the raw bytes from a DataRecord into their actual values.
 type Translate struct {
-	session.Session
+	session session.Session
 	elements informationElements
 }
 
 // NewTranslate creates a new session bound translator.
 func NewTranslate(s session.Session) *Translate {
 	return &Translate{s, builtin}
+}
+
+// GetSession returns the underlying session.
+func (t *Translate) GetSession() session.Session {
+	return t.session
 }
 
 // Key retrieves the Information Element entry for the given Key.
@@ -134,6 +135,7 @@ type Key struct {
 
 type informationElements map[Key]InformationElementEntry
 
+var builtin = make(informationElements)
 var reducedSizeErr error = errors.New("Unable to read reduced size encoding: size not implemented")
 var tooManyBitsErr error = errors.New("Unable to read reduced size encoding: too many bits")
 

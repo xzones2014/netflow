@@ -8,16 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tehmaze/netflow/read"
-	"github.com/tehmaze/netflow/session"
+	"github.com/xzones2014/netflow/read"
+	"github.com/xzones2014/netflow/session"
 )
 
-// IPFIX
-
 const (
-	// Version word in the Message Header
-	Version uint16 = 0x000a
-	// EnterpriseBit used in the Field Specifier
 	EnterpriseBit uint16 = 0x8000
 	// VariableLength used in the Field Specifier
 	VariableLength uint16 = 0xffff
@@ -468,8 +463,23 @@ func (tr *TemplateRecord) register(s session.Session) {
 		return
 	}
 	if(debug) {
+		size := tr.Size()
 		debugLog.Println("register template:", tr)
+		debugLog.Printf("  template %d: %d fields, total size: %d bytes\n", 
+			tr.TemplateID, len(tr.Fields), size)
 	}
+	
+	// Validate template before adding to session
+	validator := NewTemplateValidator(tr.TemplateID, tr)
+	result := validator.Validate()
+	if !result.Valid {
+		if debug {
+			debugLog.Printf("WARNING: Template %d validation failed:\n%s\n", tr.TemplateID, result.String())
+		}
+	} else if result.IsSuspicious && debug {
+		debugLog.Printf("NOTE: Template %d has warnings:\n%s\n", tr.TemplateID, result.String())
+	}
+	
 	s.AddTemplate(tr)
 }
 
@@ -612,6 +622,18 @@ func (this *OptionsTemplateRecord) register(s session.Session) {
 	if debug {
 		debugLog.Println("register options template:", this)
 	}
+	
+	// Validate template before adding to session
+	validator := NewTemplateValidator(this.TemplateID, this)
+	result := validator.Validate()
+	if !result.Valid {
+		if debug {
+			debugLog.Printf("WARNING: Options Template %d validation failed:\n%s\n", this.TemplateID, result.String())
+		}
+	} else if result.IsSuspicious && debug {
+		debugLog.Printf("NOTE: Options Template %d has warnings:\n%s\n", this.TemplateID, result.String())
+	}
+	
 	s.AddTemplate(this)
 }
 
@@ -667,20 +689,78 @@ func (ds *DataSet) Unmarshal(r io.Reader, template session.Template, t *Translat
 	buffer.ReadFrom(r)
 
 	ds.Records = make([]DataRecord, 0)
+	
+	// Calculate expected record size from template
+	expectedSize := ValidateTemplateSize(template)
+	initialBufferLen := buffer.Len()
+	recordIndex := 0
+	
 	var err error
 	for buffer.Len() > 0 {
+		// Check if we have enough bytes for at least one complete record
+		if buffer.Len() < expectedSize {
+			if debug {
+				debugLog.Printf("warning: insufficient bytes for template %d: have %d, need %d\n", 
+					template.ID(), buffer.Len(), expectedSize)
+			}
+			// If we have some bytes left but not enough for a complete record,
+			// it's likely padding. Check if it could be another record.
+			if buffer.Len() > 0 {
+				peekBytes := buffer.Bytes()
+				if len(peekBytes) < 4 {
+					// Not enough for even a set header, likely padding
+					break
+				}
+				// Try to detect if this looks like a valid next record
+				// by checking if we'd have alignment issues
+				if debug {
+					debugLog.Printf("remaining %d bytes at record %d, template expected %d\n",
+						buffer.Len(), recordIndex, expectedSize)
+				}
+			}
+			break
+		}
+		
 		var dr = DataRecord{}
 		dr.TemplateID = template.ID()
+		
+		// Store position before unmarshaling for error detection
+		bufferLenBefore := buffer.Len()
+		
 		if err = dr.Unmarshal(buffer, template, t); err != nil {
 			// If we hit EOF, we've exhausted the buffer. The current DataRecord is discarded,
 			// and we exit normally.
 			if err == io.EOF {
+				if debug {
+					debugLog.Printf("reached EOF after %d records\n", len(ds.Records))
+				}
 				return nil
 			} else {
+				if debug {
+					debugLog.Printf("error unmarshaling record %d: %v\n", recordIndex, err)
+				}
 				return err
 			}
 		}
+		
+		// Validate that we consumed exactly the expected number of bytes
+		bytesConsumed := bufferLenBefore - buffer.Len()
+		if bytesConsumed != expectedSize {
+			if debug {
+				debugLog.Printf("warning: template %d consumed %d bytes but expected %d bytes at record %d\n",
+					template.ID(), bytesConsumed, expectedSize, recordIndex)
+				debugLog.Printf("  possible template desynchronization: data records may be misaligned\n")
+			}
+		}
+		
 		ds.Records = append(ds.Records, dr)
+		recordIndex++
+	}
+	
+	if debug && len(ds.Records) > 0 {
+		bytesProcessed := initialBufferLen - buffer.Len()
+		debugLog.Printf("template %d: processed %d records (%d bytes), %d bytes remaining\n",
+			template.ID(), len(ds.Records), bytesProcessed, buffer.Len())
 	}
 
 	return nil
@@ -701,6 +781,9 @@ func (dr *DataRecord) Unmarshal(r io.Reader, template session.Template, t *Trans
 		for i := 0; i < len(dr.OptionScopes); i++ {
 			err = dr.OptionScopes[i].Unmarshal(r, option_template.ScopeFields[i])
 			if(err != nil) {
+				if debug {
+					debugLog.Printf("error unmarshaling option scope field %d: %v\n", i, err)
+				}
 				return err
 			}
 		}
@@ -711,6 +794,12 @@ func (dr *DataRecord) Unmarshal(r io.Reader, template session.Template, t *Trans
 	for i := 0; i < len(fss); i++ {
 		f := Field{}
 		if err = f.Unmarshal(r, fss[i]); err != nil {
+			if debug {
+				fieldType := fss[i].GetType()
+				fieldLen := fss[i].GetLength()
+				debugLog.Printf("error unmarshaling field %d (type=%d, len=%d): %v\n", 
+					i, fieldType, fieldLen, err)
+			}
 			return err
 		}
 		dr.Fields[i] = f
@@ -718,6 +807,9 @@ func (dr *DataRecord) Unmarshal(r io.Reader, template session.Template, t *Trans
 
 	if t != nil && len(dr.Fields) > 0 {
 		if err := t.Record(dr, template); err != nil {
+			if debug {
+				debugLog.Printf("error translating record: %v\n", err)
+			}
 			return err
 		}
 	}
@@ -731,16 +823,35 @@ type Field struct {
 }
 
 func (f *Field) Unmarshal(r io.Reader, fs session.TemplateFieldSpecifier) error {
-	if fs.GetLength() == VariableLength {
+	fieldType := fs.GetType()
+	fieldLen := fs.GetLength()
+	
+	if fieldLen == VariableLength {
 		var err error
 		f.Bytes, err = read.VariableLength(f.Bytes, r)
+		if err != nil && debug {
+			debugLog.Printf("error reading variable-length field (type=%d): %v\n", fieldType, err)
+		}
 		return err
 	} else {
-		f.Bytes = make([]byte, fs.GetLength())
-		_, err := r.Read(f.Bytes)
-		return err
+		f.Bytes = make([]byte, fieldLen)
+		n, err := r.Read(f.Bytes)
+		if err != nil {
+			if debug {
+				debugLog.Printf("error reading field (type=%d, len=%d, got %d bytes): %v\n", 
+					fieldType, fieldLen, n, err)
+			}
+			return err
+		}
+		if n != int(fieldLen) {
+			if debug {
+				debugLog.Printf("short read on field (type=%d, expected %d bytes, got %d)\n", 
+					fieldType, fieldLen, n)
+			}
+			return io.ErrUnexpectedEOF
+		}
+		return nil
 	}
-
 }
 
 type Fields []Field

@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/tehmaze/netflow/ipfix"
-	"github.com/tehmaze/netflow/netflow1"
-	"github.com/tehmaze/netflow/netflow5"
-	"github.com/tehmaze/netflow/netflow6"
-	"github.com/tehmaze/netflow/netflow7"
-	"github.com/tehmaze/netflow/netflow9"
-	"github.com/tehmaze/netflow/session"
+	"github.com/xzones2014/netflow/ipfix"
+	"github.com/xzones2014/netflow/netflow1"
+	"github.com/xzones2014/netflow/netflow5"
+	"github.com/xzones2014/netflow/netflow6"
+	"github.com/xzones2014/netflow/netflow7"
+	"github.com/xzones2014/netflow/netflow9"
+	"github.com/xzones2014/netflow/session"
 )
 
 // Decoder for NetFlow messages.

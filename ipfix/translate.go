@@ -1,8 +1,8 @@
 package ipfix
 
 import (
-	"github.com/tehmaze/netflow/session"
-	"github.com/tehmaze/netflow/translate"
+	"github.com/xzones2014/netflow/session"
+	"github.com/xzones2014/netflow/translate"
 )
 
 type TranslatedField struct {
@@ -22,10 +22,11 @@ func NewTranslate(s session.Session) *Translate {
 }
 
 func (t *Translate) Record(dr *DataRecord, tm session.Template) error {
-	if t.Session == nil {
+	sess := t.GetSession()
+	if sess == nil {
 		return nil
 	}
-	tm, ok := t.Session.GetTemplate(dr.TemplateID)
+	tm, ok := sess.GetTemplate(dr.TemplateID)
 	if !ok {
 		if(debug) {
 			debugLog.Printf("no template for id=%d, can't translate field\n", dr.TemplateID)

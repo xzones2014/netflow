@@ -3,8 +3,8 @@ package netflow9
 import (
 	"fmt"
 
-	"github.com/tehmaze/netflow/session"
-	"github.com/tehmaze/netflow/translate"
+	"github.com/xzones2014/netflow/session"
+	"github.com/xzones2014/netflow/translate"
 )
 
 type TranslatedField struct {
@@ -27,7 +27,8 @@ func NewTranslate(s session.Session) *Translate {
 }
 
 func (t *Translate) Record(dr *DataRecord) error {
-	if t.Session == nil {
+	sess := t.GetSession()
+	if sess == nil {
 		if debug {
 			debugLog.Println("no session, can't translate field")
 		}
@@ -37,7 +38,7 @@ func (t *Translate) Record(dr *DataRecord) error {
 		tm session.Template
 		ok bool
 	)
-	if tm, ok = t.Session.GetTemplate(dr.TemplateID); !ok {
+	if tm, ok = sess.GetTemplate(dr.TemplateID); !ok {
 		if debug {
 			debugLog.Printf("no template for id=%d, can't translate field\n", dr.TemplateID)
 		}

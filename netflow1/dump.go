@@ -3,7 +3,7 @@ package netflow1
 import (
 	"fmt"
 
-	"github.com/tehmaze/netflow/read"
+	"github.com/xzones2014/netflow/read"
 )
 
 func Dump(p *Packet) {

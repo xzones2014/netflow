@@ -5,12 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/tehmaze/netflow/session"
+	"github.com/xzones2014/netflow/session"
 )
-
-func errInvalidVersion(v uint16) error {
-	return fmt.Errorf("version %d is not a valid NetFlow packet version", v)
-}
 
 func errProtocol(f string, v ...interface{}) error {
 	return fmt.Errorf("protocol error: "+f, v...)
@@ -19,6 +15,13 @@ func errProtocol(f string, v ...interface{}) error {
 func errTemplateNotFound(t uint16) error {
 	return fmt.Errorf("template with id=%d not found", t)
 }
+
+func errInvalidVersion(v uint16) error {
+	return fmt.Errorf("version %d is not a valid NetFlow v9 packet version (expected 9)", v)
+}
+
+// Version for NetFlow v9 (RFC 3954)
+const Version uint16 = 9
 
 // Decoder can decode multiple IPFIX messages from a stream.
 type Decoder struct {

@@ -1,9 +1,8 @@
 language: go
 
-# We'll test on oldest 1.4 and newest (but not tip)
+# We'll test on latest stable
 go:
-  - 1.4
-  - 1.5.1
+  - 1.26
 
 os:
   - linux

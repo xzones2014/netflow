@@ -6,13 +6,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/tehmaze/netflow/read"
-	"github.com/tehmaze/netflow/session"
-)
-
-const (
-	// Version word in the Packet Header
-	Version uint16 = 0x0009
+	"github.com/xzones2014/netflow/read"
+	"github.com/xzones2014/netflow/session"
 )
 
 // Packet consists of a Packet Header followed by one or more FlowSets. The
