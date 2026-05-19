@@ -17,3 +17,6 @@ func Read(r io.Reader) (*Packet, error) {
 	p := new(Packet)
 	return p, p.Unmarshal(r)
 }
+
+const Version = 7
+
